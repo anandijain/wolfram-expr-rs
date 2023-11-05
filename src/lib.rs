@@ -49,7 +49,7 @@ pub use self::ptr_cmp::ExprRefCmp;
 ///
 /// Internally, `Expr` is an atomically reference-counted [`ExprKind`]. This makes cloning
 /// an expression computationally inexpensive.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Expr {
     inner: Arc<ExprKind>,
 }
@@ -284,7 +284,7 @@ impl Expr {
 
 /// Wolfram Language expression variants.
 #[allow(missing_docs)]
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExprKind<E = Expr> {
     Integer(i64),
     Real(F64),
@@ -385,74 +385,92 @@ impl Number {
 // Display & Debug impl/s
 //=======================================
 
-impl fmt::Debug for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Expr { inner } = self;
-        write!(f, "{:?}", inner)
-    }
-}
+// impl fmt::Debug for Expr {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         let Expr { inner } = self;
+//         write!(f, "{:?}", inner)
+//     }
+// }
 
-/// By default, this should generate a string which can be unambiguously parsed to
-/// reconstruct the `Expr` being displayed. This means symbols will always include their
-/// contexts, special characters in String's will always be properly escaped, and numeric
-/// literals needing precision and accuracy marks will have them.
+
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.inner)
-    }
-}
-
-impl fmt::Display for ExprKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ExprKind::Normal(ref normal) => fmt::Display::fmt(normal, f),
-            ExprKind::Integer(ref int) => fmt::Display::fmt(int, f),
-            ExprKind::Real(ref real) => fmt::Display::fmt(real, f),
-            ExprKind::String(ref string) => {
-                // Escape any '"' which appear in the string.
-                // Using the Debug implementation will cause \n, \t, etc. to appear in
-                // place of the literal character they are escapes for. This is necessary
-                // when printing expressions in a way that they can be read back in as a
-                // string, such as with ToExpression.
-                write!(f, "{:?}", string)
-            },
-            ExprKind::Symbol(ref symbol) => fmt::Display::fmt(symbol, f),
-        }
-    }
-}
-
-impl fmt::Debug for ExprKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
-impl fmt::Display for Normal {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}[", self.head)?;
-        for (idx, elem) in self.contents.iter().enumerate() {
-            write!(f, "{}", elem)?;
-            if idx != self.contents.len() - 1 {
-                write!(f, ", ")?;
+        match self.kind() {
+            ExprKind::Integer(i) => write!(f, "{}", i),
+            ExprKind::Real(r) => write!(f, "{}", r),
+            ExprKind::Symbol(s) => write!(f, "{}", s.symbol_name()),
+            ExprKind::String(s) => write!(f, "\"{}\"", s),
+            ExprKind::Normal(n) => {
+                let mut str_list = vec![n.head().to_string()];
+                let mut es: Vec<String> = n.elements().iter().map(|x| x.to_string()).collect();
+                str_list.append(&mut es);
+                write!(f, "({})", str_list.join(" "))
             }
         }
-        write!(f, "]")
     }
 }
 
-impl fmt::Display for Number {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Number::Integer(ref int) => write!(f, "{}", int),
-            Number::Real(ref real) => {
-                // Make sure we're not printing NotNan (which surprisingly implements
-                // Display)
-                let real: f64 = **real;
-                write!(f, "{:?}", real)
-            },
-        }
-    }
-}
+// /// By default, this should generate a string which can be unambiguously parsed to
+// /// reconstruct the `Expr` being displayed. This means symbols will always include their
+// /// contexts, special characters in String's will always be properly escaped, and numeric
+// /// literals needing precision and accuracy marks will have them.
+// impl fmt::Display for Expr {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{}", self.inner)
+//     }
+// }
+
+// impl fmt::Display for ExprKind {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match *self {
+//             ExprKind::Normal(ref normal) => fmt::Display::fmt(normal, f),
+//             ExprKind::Integer(ref int) => fmt::Display::fmt(int, f),
+//             ExprKind::Real(ref real) => fmt::Display::fmt(real, f),
+//             ExprKind::String(ref string) => {
+//                 // Escape any '"' which appear in the string.
+//                 // Using the Debug implementation will cause \n, \t, etc. to appear in
+//                 // place of the literal character they are escapes for. This is necessary
+//                 // when printing expressions in a way that they can be read back in as a
+//                 // string, such as with ToExpression.
+//                 write!(f, "{:?}", string)
+//             },
+//             ExprKind::Symbol(ref symbol) => fmt::Display::fmt(symbol, f),
+//         }
+//     }
+// }
+
+// impl fmt::Debug for ExprKind {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{}", self)
+//     }
+// }
+
+// impl fmt::Display for Normal {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{}[", self.head)?;
+//         for (idx, elem) in self.contents.iter().enumerate() {
+//             write!(f, "{}", elem)?;
+//             if idx != self.contents.len() - 1 {
+//                 write!(f, ", ")?;
+//             }
+//         }
+//         write!(f, "]")
+//     }
+// }
+
+// impl fmt::Display for Number {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match *self {
+//             Number::Integer(ref int) => write!(f, "{}", int),
+//             Number::Real(ref real) => {
+//                 // Make sure we're not printing NotNan (which surprisingly implements
+//                 // Display)
+//                 let real: f64 = **real;
+//                 write!(f, "{:?}", real)
+//             },
+//         }
+//     }
+// }
 
 //======================================
 // Comparision trait impls
